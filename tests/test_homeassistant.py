@@ -8,11 +8,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import voluptuous_serialize
-from homeassistant import config_entries, loader
+from homeassistant import bootstrap, config_entries, loader
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import frame
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 
@@ -34,9 +33,8 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         self.hass = HomeAssistant(self.directory.name)
         self.hass.config.skip_pip = True
         loader.async_setup(self.hass)
-        frame.async_setup(self.hass)
         self.hass.config_entries = config_entries.ConfigEntries(self.hass, {})
-        await self.hass.config_entries.async_initialize()
+        await bootstrap.async_load_base_functionality(self.hass)
         await async_setup_component(self.hass, "homeassistant", {})
         self.source = "sensor.test_amber_price"
         self.source_attributes = self.forecast_attributes()
