@@ -1,0 +1,8 @@
+{
+  "name": "Price Spike Filter",
+  "homeassistant": "2026.1.1",
+  "hacs": "2.0.5",
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "price_spike_filter.zip"
+}

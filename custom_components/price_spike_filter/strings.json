@@ -1,0 +1,87 @@
+{
+  "title": "Price Spike Filter",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a price forecast filter",
+        "description": "Select an Amber Express price sensor, or another sensor publishing a forecast of timezone-aware time/value points. Its state must be the current price.",
+        "data": {
+          "name": "Filter name",
+          "source_entity": "Source price sensor"
+        }
+      },
+      "reconfigure": {
+        "title": "Change the source price sensor",
+        "data": {
+          "name": "Filter name",
+          "source_entity": "Source price sensor"
+        }
+      }
+    },
+    "error": {
+      "invalid_source": "Select an available price sensor with valid, continuous time/value forecasts in $/kWh or c/kWh. A filter output cannot be used as its own upstream source.",
+      "already_configured": "This source already has a filter."
+    },
+    "abort": {
+      "already_configured": "This source already has a filter.",
+      "reconfigure_successful": "The source was updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure price filtering",
+        "description": "These settings express your operating preferences, not a measured probability that a spike will occur. Output uses $/kWh.",
+        "data": {
+          "enabled": "Enable filtering",
+          "preserve_hours": "Preserve near-term prices (hours)",
+          "midpoint_hours": "Time weighting midpoint (hours)",
+          "transition_hours": "Transition width (hours)",
+          "minimum_retention": "Minimum retained deviation (0–1)",
+          "baseline_window_hours": "Median baseline window (hours)",
+          "spike_scale": "Spike scale ($/kWh)",
+          "max_suppression": "Maximum extra spike suppression (0–1)",
+          "spike_direction": "Apply extra suppression to",
+          "max_source_age_minutes": "Maximum source age (minutes)"
+        },
+        "data_description": {
+          "enabled": "Turn off to publish the normalised source forecast unchanged.",
+          "preserve_hours": "Intervals starting within this lead time keep their source price.",
+          "midpoint_hours": "The distant-price retention curve reaches approximately half strength at this lead time. Must be later than the preserved window.",
+          "transition_hours": "Controls how gradually time weighting changes and how quickly extra spike suppression grows after the preserved window.",
+          "minimum_retention": "The fraction of distant deviations retained before extra spike suppression. Zero approaches the median baseline far ahead.",
+          "baseline_window_hours": "Full width of the centred duration-weighted median. A brief extreme price does not move the median unless it occupies at least half the available window.",
+          "spike_scale": "Deviation from the median at which extra spike suppression reaches about 63% of its configured maximum, before the lead-time ramp.",
+          "max_suppression": "Extra fraction removed from a large distant deviation. 0.9 removes up to 90% after time weighting.",
+          "spike_direction": "Select the sign of deviations that receive extra spike suppression. Time weighting applies to deviations in both directions.",
+          "max_source_age_minutes": "Make output unavailable when the source has not reported within this time."
+        }
+      }
+    },
+    "error": {
+      "invalid_settings": "Use finite values within the displayed ranges and set the time midpoint later than the preserved window."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "filtered": {
+        "name": "Filtered price"
+      },
+      "raw": {
+        "name": "Raw price"
+      },
+      "baseline": {
+        "name": "Baseline price"
+      }
+    }
+  },
+  "selector": {
+    "spike_direction": {
+      "options": {
+        "positive": "Positive deviations",
+        "negative": "Negative deviations",
+        "both": "Both directions"
+      }
+    }
+  }
+}
