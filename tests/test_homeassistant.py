@@ -93,7 +93,7 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raw_peak, 10)
         self.assertLess(filtered_peak, 0.25)
         self.assertEqual(self.hass.states.get(self.source).attributes, self.source_attributes)
-        with patch.object(self.hass.services, "async_call", new_callable=AsyncMock) as calls:
+        with patch.object(type(self.hass.services), "async_call", new_callable=AsyncMock) as calls:
             self.hass.states.async_set(self.source, "unavailable")
             await entry.runtime_data.async_refresh()
             await self.hass.async_block_till_done()
@@ -149,12 +149,13 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         registered = registry.async_get_or_create(
             "sensor", "test_source", "private_source_id", suggested_object_id="test_amber_price"
         )
+        self.hass.states.async_set(registered.entity_id, "0.3", self.forecast_attributes())
         entry = config_entries.ConfigEntry(
             version=1,
             minor_version=1,
             domain=DOMAIN,
             title="Test prices",
-            data={"source_entity": self.source, "source_registry_id": registered.id},
+            data={"source_entity": registered.entity_id, "source_registry_id": registered.id},
             options={},
             source="user",
             unique_id=registered.id,
@@ -163,6 +164,7 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.hass.config_entries.async_add(entry)
         await self.hass.async_block_till_done()
+        self.assertEqual(entry.state, config_entries.ConfigEntryState.LOADED)
         renamed = "sensor.renamed_amber_price"
         registry.async_update_entity(registered.entity_id, new_entity_id=renamed)
         self.hass.states.async_set(renamed, "0.3", self.forecast_attributes())
