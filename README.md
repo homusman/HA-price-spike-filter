@@ -1,6 +1,6 @@
 # Price Spike Filter
 
-A Home Assistant helper that filters future electricity prices before they reach an optimiser such as HAEO.
+A Home Assistant integration that filters future electricity prices before they reach an optimiser such as HAEO.
 
 It reads an existing price sensor, including Amber Express in advanced-price-predicted mode, and publishes **Filtered price**, **Raw price** and **Baseline price** sensors. All three expose a HAEO-compatible `forecast` attribute. The current price passes through from the source.
 
@@ -13,6 +13,18 @@ It reads an existing price sensor, including Amber Express in advanced-price-pre
 5. Use **Configure** on the integration entry to adjust the policy.
 
 Create one entry for each tariff channel you want to filter. The source sensor must already provide the price model you want to use. For Amber Express, select its price sensor configured to use advanced-price-predicted.
+
+### Upgrading from the helper version
+
+Update through HACS and restart Home Assistant Core. Existing filters move from
+the Helpers tab to **Settings → Devices & services → Integrations → Price Spike Filter**.
+Their settings, source mappings, devices and sensor entity IDs are preserved;
+do not delete or recreate them. HAEO references to existing filtered sensors continue to work.
+
+Use **Configure** on the relevant entry to edit filtering parameters. Use its
+**⋮ → Reconfigure** to change the source or filter name, or **⋮ → Delete** to
+remove that filter. Separate import and feed-in filters appear under the same
+Price Spike Filter integration.
 
 For manual installation, extract the release ZIP into `config/custom_components/price_spike_filter/`, then restart Core. The folder should contain `manifest.json` directly.
 

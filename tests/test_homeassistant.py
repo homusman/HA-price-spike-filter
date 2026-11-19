@@ -124,6 +124,29 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(entry.runtime_data.settings.enabled)
         self.assertEqual(entry.runtime_data.data.raw, entry.runtime_data.data.filtered)
 
+    async def test_service_registration_preserves_existing_entries_and_editable_settings(self):
+        integration = await loader.async_get_integration(self.hass, DOMAIN)
+        self.assertEqual(integration.integration_type, "service")
+        entry = await self.add_entry({"spike_scale": 0.15})
+        identities = {kind: self.sensor_id(entry, kind) for kind in ("filtered", "raw", "baseline")}
+        original_data = dict(entry.data)
+        result = await self.hass.config_entries.options.async_init(entry.entry_id)
+        self.assertEqual(result["type"], "form")
+        submitted = {
+            **{key: getattr(Settings(), key) for key in Settings.__dataclass_fields__},
+            "spike_scale": 0.25,
+            "midpoint_hours": 16,
+        }
+        result = await self.hass.config_entries.options.async_configure(result["flow_id"], submitted)
+        self.assertEqual(result["type"], "create_entry")
+        await self.hass.async_block_till_done()
+        await self.hass.config_entries.async_reload(entry.entry_id)
+        await self.hass.async_block_till_done()
+        self.assertEqual(entry.data, original_data)
+        self.assertEqual(entry.runtime_data.settings.spike_scale, 0.25)
+        self.assertEqual(entry.runtime_data.settings.midpoint_hours, 16)
+        self.assertEqual({kind: self.sensor_id(entry, kind) for kind in identities}, identities)
+
     async def test_config_flow_validates_source_and_prevents_duplicates(self):
         result = await self.hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
         bad = await self.hass.config_entries.flow.async_configure(
