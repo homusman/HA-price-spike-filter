@@ -1,14 +1,14 @@
-# Price Spike Filter v0.1.1
+# Price Spike Filter v0.1.2 — interval rollover continuity
 
-Price Spike Filter now appears on Home Assistant's **Integrations** tab instead
-of **Helpers**, with filtering parameters accessible through **Configure**.
+Fixes recurring half-hour unavailability while Amber updates its current price.
+An expired or slightly early current observation no longer invalidates a still-fresh forecast that
+covers the new interval. The active forecast value is used with
+`current_price_estimated: true`; arrival of the new observation clears that flag.
+Observed prices are only applied within their stated intervals.
 
-Update through HACS and restart Home Assistant Core. Existing entries, settings,
-source mappings, devices and sensor entity IDs are preserved automatically.
-No deletion, recreation or HAEO sensor remapping is required.
+Source-age limits, source unavailability, missing coverage and malformed-forecast
+checks remain active. No dispatcher fallback or HAEO plan validation is disabled.
 
-- Open Settings → Devices & services → Integrations → Price Spike Filter.
-- Use Configure on an entry for all filtering parameters.
-- Use the entry's ⋮ → Reconfigure to change its name or source, or Delete to remove it.
-
-Forecast calculations and availability handling are unchanged.
+Update in HACS and restart Home Assistant. Existing filter settings and entity IDs
+are preserved. This addresses the logged price-filter/HAEO/dispatcher failure chain;
+independent Load forecast outages still need their own diagnosis.

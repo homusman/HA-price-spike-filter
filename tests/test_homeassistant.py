@@ -206,6 +206,33 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
             await entry.runtime_data.async_refresh()
         self.assertFalse(entry.runtime_data.last_update_success)
 
+    async def test_timer_rollover_keeps_forecast_available_until_observation_catches_up(self):
+        entry = await self.add_entry()
+        entity_id = self.sensor_id(entry, "filtered")
+        now = dt_util.utcnow()
+        source = self.forecast_attributes()
+        source["start_time"] = (now - timedelta(minutes=25)).isoformat()
+        source["end_time"] = (now + timedelta(minutes=5)).isoformat()
+        self.hass.states.async_set(self.source, "0.3", source)
+        await entry.runtime_data.async_refresh()
+        with patch(
+            "custom_components.price_spike_filter.coordinator.dt_util.utcnow",
+            return_value=now + timedelta(minutes=5, seconds=18),
+        ):
+            await entry.runtime_data.async_refresh()
+            await self.hass.async_block_till_done()
+            self.assertTrue(entry.runtime_data.last_update_success)
+            filtered = self.hass.states.get(entity_id)
+            self.assertEqual(float(filtered.state), 0.2)
+            self.assertTrue(filtered.attributes["current_price_estimated"])
+            self.assertTrue(filtered.attributes["forecast"])
+            self.assertEqual(self.hass.states.get(self.source).state, "0.3")
+            self.hass.states.async_set(self.source, "0.17", self.forecast_attributes())
+            await entry.runtime_data.async_refresh()
+            await self.hass.async_block_till_done()
+            self.assertEqual(float(self.hass.states.get(entity_id).state), 0.17)
+            self.assertFalse(self.hass.states.get(entity_id).attributes["current_price_estimated"])
+
     async def test_numeric_options_serialize_for_the_ui(self):
         fields = voluptuous_serialize.convert(settings_schema({}), custom_serializer=cv.custom_serializer)
         numeric = [field for field in fields if field["name"] == "spike_scale"]

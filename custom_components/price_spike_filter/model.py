@@ -65,6 +65,7 @@ class Point:
 class Snapshot:
     current_price: float
     points: tuple[Point, ...]
+    current_price_estimated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,7 @@ class Result:
     raw: tuple[Point, ...]
     filtered: tuple[Point, ...]
     baseline: tuple[Point, ...]
+    current_price_estimated: bool = False
 
     @property
     def changed_intervals(self) -> int:
@@ -146,20 +148,29 @@ def parse_source(state: str, attributes: Mapping, now: datetime) -> Snapshot:
             raise ValueError("Forecast interval has no positive duration")
         points.append(Point(start, end, value))
 
-    # Amber Express supplies the current interval separately from future prices.
+    estimated = False
+    # Use an observation only inside the interval it describes. After rollover,
+    # a still-fresh source forecast can cover now while Amber publishes its update.
     if attributes.get("start_time") is not None and attributes.get("end_time") is not None:
         current_start = parse_time(attributes["start_time"])
         current_end = parse_time(attributes["end_time"])
-        if not current_start <= now < current_end:
-            raise ValueError("Source current-price interval has expired or is in the future")
-        remaining = []
-        for point in points:
-            if point.end <= current_start or point.start >= current_end:
-                remaining.append(point)
-            elif point.end > current_end:
-                remaining.append(Point(current_end, point.end, point.value))
-        points = [Point(current_start, current_end, current), *remaining]
-        points.sort(key=lambda point: point.start)
+        if current_end <= current_start:
+            raise ValueError("Source current-price interval is invalid")
+        if current_start <= now < current_end:
+            remaining = []
+            for point in points:
+                if point.end <= current_start or point.start >= current_end:
+                    remaining.append(point)
+                elif point.end > current_end:
+                    remaining.append(Point(current_end, point.end, point.value))
+            points = [Point(current_start, current_end, current), *remaining]
+            points.sort(key=lambda point: point.start)
+        else:
+            active = next((point for point in points if point.start <= now < point.end), None)
+            if active is None:
+                raise ValueError("Source forecast does not cover the current time during interval rollover")
+            current = active.value
+            estimated = True
     else:
         points = [
             Point(point.start, point.end, current) if point.start <= now < point.end else point for point in points
@@ -167,9 +178,11 @@ def parse_source(state: str, attributes: Mapping, now: datetime) -> Snapshot:
     points = [point for point in points if point.end > now]
     if not points:
         raise ValueError("Source forecast has expired")
+    if not points[0].start <= now < points[0].end:
+        raise ValueError("Source forecast does not cover the current time")
     if any(left.end != right.start for left, right in zip(points, points[1:])):
         raise ValueError("Source forecast has gaps or overlapping intervals")
-    return Snapshot(current, tuple(points))
+    return Snapshot(current, tuple(points), estimated)
 
 
 def weighted_median(values: list[tuple[float, float]]) -> float:
@@ -226,4 +239,4 @@ def filter_forecast(snapshot: Snapshot, now: datetime, settings: Settings) -> Re
                 retention *= 1 - settings.max_suppression * spike * ramp
             value = baseline + retention * deviation
         filtered.append(Point(point.start, point.end, value))
-    return Result(snapshot.current_price, raw, tuple(filtered), tuple(baselines))
+    return Result(snapshot.current_price, raw, tuple(filtered), tuple(baselines), snapshot.current_price_estimated)

@@ -2,7 +2,7 @@
 
 A Home Assistant integration that filters future electricity prices before they reach an optimiser such as HAEO.
 
-It reads an existing price sensor, including Amber Express in advanced-price-predicted mode, and publishes **Filtered price**, **Raw price** and **Baseline price** sensors. All three expose a HAEO-compatible `forecast` attribute. The current price passes through from the source.
+It reads an existing price sensor, including Amber Express in advanced-price-predicted mode, and publishes **Filtered price**, **Raw price** and **Baseline price** sensors. All three expose a HAEO-compatible `forecast` attribute. The current observation passes through within its stated interval.
 
 ## Install with HACS
 
@@ -88,7 +88,16 @@ forecast:
 
 Each price holds until the next timestamp. The final interval uses its explicit `end_time`, the source's `forecast_end`, or the duration of the preceding interval. A single forecast record needs an explicit end. The source may provide `start_time` and `end_time` for the current price, as Amber Express does. That current reading is inserted into the appropriate interval.
 
-Unavailable or stale source readings, expired current-price intervals, nonfinite prices, malformed timestamps, duplicate timestamps and explicit gaps or overlaps make the output unavailable. Missing data is not silently replaced by zero or an old forecast.
+At interval rollover, Amber may publish its next observation slightly early or late. If the
+source is still fresh and its forecast covers the current time, the filter uses
+that interval's forecast price and reports `current_price_estimated: true`. The
+expired observation is not extended into the new interval, and an early observation
+is not applied before its interval starts. A valid new observation
+automatically restores `current_price_estimated: false`.
+
+Unavailable or stale source readings, missing current-time forecast coverage,
+nonfinite prices, malformed timestamps, duplicate timestamps and explicit gaps or
+overlaps make the output unavailable. Missing data is not silently replaced by zero.
 
 Source changes trigger updates. A one-minute timer also recalculates lead-time weighting and checks availability. Sensor renames are resolved through the Home Assistant entity registry. To select a different source, use **Reconfigure**.
 

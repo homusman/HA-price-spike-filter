@@ -128,13 +128,60 @@ class ModelTests(unittest.TestCase):
             with self.subTest(source=repr(source)[:80]), self.assertRaises(ValueError):
                 model.parse_source("0.3", source, NOW)
 
-    def test_expired_current_interval_and_forecast_are_rejected(self):
+    def test_expired_observation_uses_forecast_covering_now(self):
         source = attributes()
         source.update({"start_time": (NOW - timedelta(hours=1)).isoformat(), "end_time": NOW.isoformat()})
-        with self.assertRaises(ValueError):
-            model.parse_source("0.3", source, NOW)
+        snapshot = model.parse_source("0.3", source, NOW)
+        self.assertEqual(snapshot.current_price, 0.2)
+        self.assertTrue(snapshot.current_price_estimated)
         with self.assertRaises(ValueError):
             model.parse_source("0.3", attributes([0.2, 0.3]), NOW + timedelta(days=1))
+
+    def test_half_hour_rollover_does_not_reuse_expired_observation(self):
+        source = attributes([0.2, 0.15, 0.4])
+        for index, point in enumerate(source["forecast"]):
+            point["time"] = (NOW + timedelta(minutes=30 * index)).isoformat()
+        source.update(start_time=NOW.isoformat(), end_time=(NOW + timedelta(minutes=30)).isoformat())
+        before = model.parse_source("0.3", source, NOW + timedelta(minutes=29, seconds=59))
+        self.assertEqual(before.current_price, 0.3)
+        self.assertFalse(before.current_price_estimated)
+        for seconds in (0, 18, 48):
+            at = NOW + timedelta(minutes=30, seconds=seconds)
+            snapshot = model.parse_source("0.3", source, at)
+            result = model.filter_forecast(snapshot, at, model.Settings())
+            self.assertEqual(result.current_price, 0.15)
+            self.assertTrue(result.current_price_estimated)
+            self.assertEqual(result.filtered[0].value, 0.15)
+        source.update(
+            start_time=(NOW + timedelta(minutes=30)).isoformat(), end_time=(NOW + timedelta(hours=1)).isoformat()
+        )
+        recovered = model.parse_source("0.17", source, NOW + timedelta(minutes=31))
+        self.assertEqual(recovered.current_price, 0.17)
+        self.assertFalse(recovered.current_price_estimated)
+
+    def test_rollover_requires_forecast_coverage_for_expired_or_early_observations(self):
+        source = attributes([0.2, 0.3])
+        source.update(start_time=(NOW - timedelta(hours=1)).isoformat(), end_time=NOW.isoformat())
+        source["forecast"] = source["forecast"][1:]
+        source["forecast_end"] = (NOW + timedelta(hours=2)).isoformat()
+        with self.assertRaisesRegex(ValueError, "does not cover"):
+            model.parse_source("0.5", source, NOW)
+        source.update(
+            start_time=(NOW + timedelta(hours=1)).isoformat(), end_time=(NOW + timedelta(hours=2)).isoformat()
+        )
+        with self.assertRaisesRegex(ValueError, "does not cover"):
+            model.parse_source("0.5", source, NOW)
+
+    def test_early_observation_is_not_applied_before_its_interval(self):
+        source = attributes([0.2, 0.4])
+        boundary = NOW + timedelta(minutes=30)
+        source.update(start_time=boundary.isoformat(), end_time=(boundary + timedelta(minutes=30)).isoformat())
+        early = model.parse_source("0.17", source, boundary - timedelta(seconds=1))
+        self.assertEqual(early.current_price, 0.2)
+        self.assertTrue(early.current_price_estimated)
+        on_time = model.parse_source("0.17", source, boundary)
+        self.assertEqual(on_time.current_price, 0.17)
+        self.assertFalse(on_time.current_price_estimated)
 
     def test_explicit_ends_gaps_singletons_and_timezone_offsets(self):
         source = attributes([0.2, 0.3])

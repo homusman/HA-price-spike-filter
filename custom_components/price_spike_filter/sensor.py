@@ -58,6 +58,7 @@ class PriceSensor(CoordinatorEntity[PriceFilterCoordinator], SensorEntity):
             "price_spike_filter": DOMAIN,
             "source_entity": source_entity_id(self.hass, self.entry),
             "filter_enabled": self.coordinator.settings.enabled,
+            "current_price_estimated": data.current_price_estimated,
             "changed_intervals": data.changed_intervals,
             "largest_adjustment": data.largest_adjustment,
         }
