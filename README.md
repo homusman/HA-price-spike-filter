@@ -93,7 +93,9 @@ source is still fresh and its forecast covers the current time, the filter uses
 that interval's forecast price and reports `current_price_estimated: true`. The
 expired observation is not extended into the new interval, and an early observation
 is not applied before its interval starts. A valid new observation
-automatically restores `current_price_estimated: false`.
+automatically restores `current_price_estimated: false`. If an early update has
+already removed the previous interval, a previously validated forecast may bridge
+the gap only while it covers now and its original source report is still fresh.
 
 Unavailable or stale source readings, missing current-time forecast coverage,
 nonfinite prices, malformed timestamps, duplicate timestamps and explicit gaps or

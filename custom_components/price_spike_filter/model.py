@@ -19,6 +19,10 @@ NUMERIC_RANGES = {
 }
 
 
+class EarlyObservationError(ValueError):
+    """A slightly early observation has replaced the forecast covering now."""
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """An operator-selected filtering policy, rather than a probability model."""
@@ -168,6 +172,10 @@ def parse_source(state: str, attributes: Mapping, now: datetime) -> Snapshot:
         else:
             active = next((point for point in points if point.start <= now < point.end), None)
             if active is None:
+                if now < current_start <= now + timedelta(minutes=1) and all(
+                    left.end == right.start for left, right in zip(points, points[1:])
+                ):
+                    raise EarlyObservationError("Source observation arrived before its interval starts")
                 raise ValueError("Source forecast does not cover the current time during interval rollover")
             current = active.value
             estimated = True

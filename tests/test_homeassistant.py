@@ -237,3 +237,50 @@ class HomeAssistantTests(unittest.IsolatedAsyncioTestCase):
         fields = voluptuous_serialize.convert(settings_schema({}), custom_serializer=cv.custom_serializer)
         numeric = [field for field in fields if field["name"] == "spike_scale"]
         self.assertIn("number", numeric[0]["selector"])
+
+    async def test_early_payload_without_previous_interval_uses_valid_cached_interval(self):
+        entry = await self.add_entry()
+        entity_id = self.sensor_id(entry, "filtered")
+        now = dt_util.utcnow()
+        boundary = now + timedelta(minutes=5)
+        observed = self.forecast_attributes()
+        observed.update(start_time=now.isoformat(), end_time=boundary.isoformat())
+        self.hass.states.async_set(self.source, "0.3", observed)
+        await entry.runtime_data.async_refresh()
+        early = self.forecast_attributes()
+        early["start_time"] = boundary.isoformat()
+        early["end_time"] = (boundary + timedelta(minutes=30)).isoformat()
+        early["forecast"] = [
+            {"time": (boundary + timedelta(minutes=30 * i)).isoformat(), "value": 0.17} for i in range(48)
+        ]
+        with patch(
+            "custom_components.price_spike_filter.coordinator.dt_util.utcnow",
+            return_value=boundary - timedelta(seconds=1),
+        ):
+            self.hass.states.async_set(self.source, "0.17", early)
+            await entry.runtime_data.async_refresh()
+            await self.hass.async_block_till_done()
+            self.assertTrue(entry.runtime_data.last_update_success)
+            self.assertEqual(float(self.hass.states.get(entity_id).state), 0.3)
+            self.assertTrue(self.hass.states.get(entity_id).attributes["current_price_estimated"])
+        with patch("custom_components.price_spike_filter.coordinator.dt_util.utcnow", return_value=boundary):
+            await entry.runtime_data.async_refresh()
+            await self.hass.async_block_till_done()
+            self.assertTrue(entry.runtime_data.last_update_success)
+            self.assertEqual(float(self.hass.states.get(entity_id).state), 0.17)
+            self.assertFalse(self.hass.states.get(entity_id).attributes["current_price_estimated"])
+
+    async def test_early_update_cannot_refresh_the_age_of_a_cached_forecast(self):
+        entry = await self.add_entry({"max_source_age_minutes": 1})
+        now = dt_util.utcnow()
+        entry.runtime_data._last_snapshot_reported_at = now - timedelta(minutes=2)
+        with patch("custom_components.price_spike_filter.coordinator.dt_util.utcnow", return_value=now):
+            source = self.forecast_attributes()
+            source["start_time"] = (now + timedelta(seconds=1)).isoformat()
+            source["end_time"] = (now + timedelta(minutes=30)).isoformat()
+            source["forecast"][0]["time"] = source["start_time"]
+            self.hass.states.async_set(self.source, "0.17", source)
+            await entry.runtime_data.async_refresh()
+            await self.hass.async_block_till_done()
+            self.assertFalse(entry.runtime_data.last_update_success)
+            self.assertIn("before its interval", str(entry.runtime_data.last_exception))

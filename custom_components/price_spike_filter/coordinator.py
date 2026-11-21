@@ -11,7 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_SOURCE, CONF_SOURCE_REGISTRY_ID
-from .model import Result, Settings, filter_forecast, parse_source
+from .model import EarlyObservationError, Result, Settings, Snapshot, filter_forecast, parse_source
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +40,8 @@ class PriceFilterCoordinator(DataUpdateCoordinator[Result]):
         self.settings = Settings.from_options(entry.options)
         self._source = None
         self._unsubscribe = None
+        self._last_snapshot = None
+        self._last_snapshot_reported_at = None
 
     @callback
     def async_subscribe(self) -> None:
@@ -71,7 +73,27 @@ class PriceFilterCoordinator(DataUpdateCoordinator[Result]):
         if age < -60 or age > self.settings.max_source_age_minutes * 60:
             raise UpdateFailed("Source price sensor is stale")
         try:
-            snapshot = parse_source(state.state, state.attributes, now)
+            try:
+                snapshot = parse_source(state.state, state.attributes, now)
+            except EarlyObservationError:
+                # A new Amber payload can omit the previous interval a second
+                # before the boundary. Use only cached intervals still valid now.
+                previous = self._last_snapshot
+                if (
+                    previous is None
+                    or self._last_snapshot_reported_at is None
+                    or not 0
+                    <= (now - self._last_snapshot_reported_at).total_seconds()
+                    <= self.settings.max_source_age_minutes * 60
+                ):
+                    raise
+                points = tuple(point for point in previous.points if point.end > now)
+                if not points or not points[0].start <= now < points[0].end:
+                    raise
+                snapshot = Snapshot(points[0].value, points, True)
+            else:
+                self._last_snapshot = snapshot
+                self._last_snapshot_reported_at = state.last_reported
             result = await self.hass.async_add_executor_job(filter_forecast, snapshot, now, self.settings)
         except ValueError as error:
             raise UpdateFailed(str(error)) from error
