@@ -1,19 +1,17 @@
-# Price Spike Filter v0.1.3 — interval rollover continuity
+# Price Spike Filter v0.1.4 — Amber forecast Recorder patch
 
-Fixes recurring half-hour unavailability while Amber updates its current price.
-An expired or slightly early current observation no longer invalidates a still-fresh forecast that
-covers the new interval. The active forecast value is used with
-`current_price_estimated: true`; arrival of the new observation clears that flag.
-Observed prices are only applied within their stated intervals.
+Automatically excludes the built-in Amber Electric forecast sensors' large
+`forecasts` attribute from Recorder, preventing the 16 KiB oversized-attributes
+warning without changing Recorder YAML or excluding the whole sensor.
 
-Source-age limits, source unavailability, missing coverage and malformed-forecast
-checks remain active. No dispatcher fallback or HAEO plan validation is disabled.
+- Full live forecasts remain available to HAEO and dashboards.
+- Numeric price history and small metadata remain recordable.
+- Covers existing/new Amber forecast entities, including renamed ones.
+- Does not suppress warnings, delete history, edit Core files or change filtering.
 
-Update in HACS and restart Home Assistant. Existing filter settings and entity IDs
-are preserved. This addresses the logged price-filter/HAEO/dispatcher failure chain;
-independent Load forecast outages still need their own diagnosis.
+The narrow runtime compatibility patch uses Home Assistant entity recording
+metadata. Update Price Spike Filter in HACS and restart; no configuration changes
+are needed. A future Core update may require compatibility maintenance.
 
-When an early Amber update removes the previous interval entirely, the filter
-can use its previously validated forecast only while it covers the present and
-its original source report remains within the source-age limit. There is no
-zero-fill or extrapolation of an expired observation.
+Regression tests exercise Recorder's real attribute serializer with an oversized
+forecast and verify that live data and unrelated entities remain untouched.

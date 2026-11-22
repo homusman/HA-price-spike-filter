@@ -3,10 +3,18 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_when_setup
 
 from .coordinator import PriceFilterCoordinator
+from .recorder_guard import async_install_amber_guard
 
 PLATFORMS = [Platform.SENSOR]
+
+
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
+    """Keep large built-in Amber forecasts live without recording their arrays."""
+    async_when_setup(hass, "amberelectric", async_install_amber_guard)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

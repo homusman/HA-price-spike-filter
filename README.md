@@ -133,3 +133,25 @@ python -m unittest discover -s tests -v
 ```
 
 GitHub Actions runs the tests, lint checks, Home Assistant manifest validation and HACS validation before publishing a release from the default branch.
+
+
+## Built-in Amber forecast Recorder compatibility
+
+From v0.1.4, this integration automatically adds a narrowly scoped runtime patch
+for the built-in Amber Electric integration's forecast sensors. Only their large
+`forecasts` attribute is excluded from Recorder. Numeric price history and smaller
+metadata continue to be recorded; full live attributes remain available to HAEO,
+dashboards and filtering. Existing Recorder configuration is untouched.
+
+The patch covers existing Amber forecast entities and applies the exclusion
+before new ones first publish. It follows the entity class rather than hardcoded
+entity IDs, so renamed forecast sensors are covered. Other Amber entities and
+other integrations are unchanged. Recorder logging is not suppressed, and no
+Home Assistant Core files are edited.
+
+This is a compatibility shim around Home Assistant entity metadata, not a native
+Amber configuration option. It is installed when Price Spike Filter loads and
+Amber Electric is set up. Update in HACS and restart; no new entry, source mapping
+or YAML changes are needed. Removing or rolling back Price Spike Filter and
+restarting removes this compatibility patch. Previously logged warnings remain
+in the log; stored history is not purged.
